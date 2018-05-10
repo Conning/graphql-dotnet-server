@@ -38,11 +38,11 @@ namespace GraphQL.Server.Transports.Subscriptions.Abstractions
 
         public async Task OnConnect()
         {
-            _logger.LogInformation("Connected...");
+            //_logger.LogDebug("Connected...");
             LinkToTransportWriter();
             LinkToTransportReader();
 
-            LogServerInformation();
+            //LogServerInformation();
 
             // when transport reader is completed it should propagate here
             await _handler.Completion;
@@ -74,7 +74,7 @@ namespace GraphQL.Server.Transports.Subscriptions.Abstractions
             foreach (var listener in _messageListeners)
                 builder.AppendLine(listener.GetType().FullName);
 
-            _logger.LogInformation(builder.ToString());
+            _logger.LogDebug(builder.ToString());
         }
 
         private void LinkToTransportReader()
