@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
@@ -45,7 +46,14 @@ namespace GraphQL.Server.Transports.Subscriptions.Abstractions
             //LogServerInformation();
 
             // when transport reader is completed it should propagate here
-            await _handler.Completion;
+            try
+            {
+                await _handler.Completion;
+            }
+            catch (AggregateException e)
+            {
+                return;
+            }
 
             // complete write buffer
             await TransportWriter.Complete();
