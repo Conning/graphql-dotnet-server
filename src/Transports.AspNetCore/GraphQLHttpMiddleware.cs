@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -9,6 +10,7 @@ using GraphQL.Types;
 using GraphQL.Validation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 using Newtonsoft.Json;
@@ -26,10 +28,12 @@ namespace GraphQL.Server.Transports.AspNetCore
         private readonly IDocumentExecuter _executer;
         private readonly IDocumentWriter _writer;
         private readonly TSchema _schema;
+        private ILogger<GraphQLHttpMiddleware<TSchema>> _logger;
 
         public GraphQLHttpMiddleware(
             RequestDelegate next,
             IOptions<GraphQLHttpOptions> options,
+            ILogger<GraphQLHttpMiddleware<TSchema>> logger,
             IDocumentExecuter executer,
             IDocumentWriter writer,
             TSchema schema)
@@ -39,6 +43,7 @@ namespace GraphQL.Server.Transports.AspNetCore
             _executer = executer;
             _writer = writer;
             _schema = schema;
+            _logger = logger;
         }
 
         public async Task Invoke(HttpContext context)
@@ -100,18 +105,28 @@ namespace GraphQL.Server.Transports.AspNetCore
                 userContext = _options.BuildUserContext?.Invoke(context);
             }
 
-            var result = await _executer.ExecuteAsync(_ =>
+            try
             {
-                _.Schema = schema;
-                _.Query = gqlRequest.Query;
-                _.OperationName = gqlRequest.OperationName;
-                _.Inputs = gqlRequest.Variables.ToInputs();
-                _.UserContext = userContext;
-                _.ExposeExceptions = _options.ExposeExceptions;
-                _.ValidationRules = _options.ValidationRules.Concat(DocumentValidator.CoreRules()).ToList();
-            });
+                var result = await _executer.ExecuteAsync(_ =>
+                {
+                    _.Schema = schema;
+                    _.Query = gqlRequest.Query;
+                    _.OperationName = gqlRequest.OperationName;
+                    _.Inputs = gqlRequest.Variables.ToInputs();
+                    _.UserContext = userContext;
+                    _.ExposeExceptions = _options.ExposeExceptions;
+                    _.ValidationRules = _options.ValidationRules.Concat(DocumentValidator.CoreRules()).ToList();
+                });
+                
+                await WriteResponseAsync(context, result);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e.ToString());
+                throw e;
+            }
 
-            await WriteResponseAsync(context, result);
+           
         }
 
         private async Task WriteResponseAsync(HttpContext context, HttpStatusCode statusCode, string errorMessage)
@@ -120,8 +135,10 @@ namespace GraphQL.Server.Transports.AspNetCore
             {
                 Errors = new ExecutionErrors()
             };
+            _logger.LogError($"Error responding to GraphQL request:  {errorMessage}");
             result.Errors.Add(new ExecutionError(errorMessage));
 
+            
             await WriteResponseAsync(context, result);
         }
 
