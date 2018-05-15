@@ -35,31 +35,33 @@ namespace GraphQL.Server.Transports.WebSockets
 
         public async Task Invoke(HttpContext context)
         {
-            using (_logger.BeginScope(new Dictionary<string, object>
+            if (!IsGraphQLRequest(context))
             {
-                ["ConnectionId"] = context.Connection.Id,
-                ["Request"] = context.Request
-            }))
+                //_logger.LogInformation("Request is not a valid  websocket request");
+                await _next(context);
+                return;
+            }
+            else
             {
-                if (!IsGraphQLRequest(context))
+                using (_logger.BeginScope(new Dictionary<string, object>
                 {
-                    //_logger.LogInformation("Request is not a valid  websocket request");
-                    await _next(context);
-                    return;
+                    ["ConnectionId"] = context.Connection.Id,
+                    ["Request"] = context.Request
+                }))
+                {
+                    //_logger.LogInformation("Connection is a valid websocket request");
+                    await ExecuteAsync(context);
                 }
-
-                //_logger.LogInformation("Connection is a valid websocket request");
-                await ExecuteAsync(context);
             }
         }
 
         private bool IsGraphQLRequest(HttpContext context)
         {
-            var path = context.Request.Path;
-            if (!path.StartsWithSegments(_options.Path))
+            if (!context.WebSockets.IsWebSocketRequest)
                 return false;
 
-            if (!context.WebSockets.IsWebSocketRequest)
+            var path = context.Request.Path;
+            if (!path.StartsWithSegments(_options.Path))
                 return false;
 
             return true;
