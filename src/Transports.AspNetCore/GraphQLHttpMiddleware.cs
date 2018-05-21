@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using Conning.Library.Utility;
 using GraphQL.Http;
 using GraphQL.Server.Transports.AspNetCore.Common;
 using GraphQL.Types;
@@ -147,8 +148,14 @@ namespace GraphQL.Server.Transports.AspNetCore
             var json = _writer.Write(result);
 
             context.Response.ContentType = "application/json";
-            context.Response.StatusCode = result.Errors?.Any() == true ? (int)HttpStatusCode.BadRequest : (int)HttpStatusCode.OK;
+            context.Response.StatusCode =  (int)HttpStatusCode.OK;
 
+            if (result.Errors?.Any() == true)
+            {
+                context.Response.StatusCode = (int) HttpStatusCode.BadRequest;
+                _logger.LogError($"Error responding to GraphQL request:  ");
+                result.Errors.ForEach(e => _logger.LogError(e.InnerException != null ? e.InnerException.ToString() : e.ToString()));
+            }
             await context.Response.WriteAsync(json);
         }
 
