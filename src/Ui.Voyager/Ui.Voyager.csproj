@@ -1,6 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>GraphQL.Server.Ui.Voyager</AssemblyName>
@@ -16,13 +15,10 @@
     <Copyright>Pekka Heikura</Copyright>
     <PackageId>GraphQL.Server.Ui.Voyager</PackageId>
   </PropertyGroup>
-
   <ItemGroup>
     <EmbeddedResource Include="Internal\voyager.cshtml" />
   </ItemGroup>
-
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.1.0-rc1-final" />
   </ItemGroup>
-
 </Project>
