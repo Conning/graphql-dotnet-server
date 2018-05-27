@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using Conning.Library.Utility;
+using GraphQL.DataLoader;
 using GraphQL.Http;
 using GraphQL.Server.Transports.AspNetCore.Common;
 using GraphQL.Types;
@@ -27,6 +28,7 @@ namespace GraphQL.Server.Transports.AspNetCore
         private readonly RequestDelegate _next;
         private readonly GraphQLHttpOptions _options;
         private readonly IDocumentExecuter _executer;
+        private readonly DataLoaderDocumentListener _dataLoaderDocumentListener;
         private readonly IDocumentWriter _writer;
         private readonly TSchema _schema;
         private ILogger<GraphQLHttpMiddleware<TSchema>> _logger;
@@ -36,12 +38,14 @@ namespace GraphQL.Server.Transports.AspNetCore
             IOptions<GraphQLHttpOptions> options,
             ILogger<GraphQLHttpMiddleware<TSchema>> logger,
             IDocumentExecuter executer,
+            DataLoaderDocumentListener dataLoaderDocumentListener,
             IDocumentWriter writer,
             TSchema schema)
         {
             _next = next;
             _options = options.Value;
             _executer = executer;
+            _dataLoaderDocumentListener = dataLoaderDocumentListener;
             _writer = writer;
             _schema = schema;
             _logger = logger;
@@ -117,6 +121,7 @@ namespace GraphQL.Server.Transports.AspNetCore
                     _.UserContext = userContext;
                     _.ExposeExceptions = _options.ExposeExceptions;
                     _.ValidationRules = _options.ValidationRules.Concat(DocumentValidator.CoreRules()).ToList();
+                    _.Listeners.Add(_dataLoaderDocumentListener);
                 });
                 
                 await WriteResponseAsync(context, result);
