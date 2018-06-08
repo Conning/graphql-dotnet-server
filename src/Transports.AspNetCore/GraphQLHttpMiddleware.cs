@@ -72,7 +72,18 @@ namespace GraphQL.Server.Transports.AspNetCore
             // Handle requests as per recommendation at http://graphql.org/learn/serving-over-http/
             var httpRequest = context.Request;
             var gqlRequest = new GraphQLRequest();
-            
+
+            object userContext = null;
+            var userContextBuilder = context.RequestServices.GetService<IUserContextBuilder>();
+            if (userContextBuilder != null)
+            {
+                userContext = await userContextBuilder.BuildUserContext(context);
+            }
+            else
+            {
+                userContext = _options.BuildUserContext?.Invoke(context);
+            }
+
             if (HttpMethods.IsGet(httpRequest.Method) || (HttpMethods.IsPost(httpRequest.Method) && httpRequest.Query.ContainsKey(GraphQLRequest.QueryKey)))
             {
                 ExtractGraphQLRequestFromQueryString(httpRequest.Query, gqlRequest);
@@ -88,28 +99,54 @@ namespace GraphQL.Server.Transports.AspNetCore
                 switch (mediaTypeHeader.MediaType)
                 {
                     case JsonContentType:
-                        gqlRequest = Deserialize<GraphQLRequest>(httpRequest.Body);
+                        var body = Deserialize<dynamic>(httpRequest.Body);
+                        if (body.Type == JTokenType.Array)
+                        {
+                            var array = (body as JArray).ToArray<dynamic>();
+
+                            var results = await Task.WhenAll(
+                                array.Select((dynamic r) =>
+                                {
+                                    var query = r.query;
+                                    var operation = r.operationName;
+                                    var variables = (JObject)r.variables;
+
+                                    return _executer.ExecuteAsync(_ =>
+                                    {
+                                        _.Schema = schema;
+                                        _.Query = query;
+                                    _.OperationName = operation;
+                                        _.Inputs = variables.ToInputs();
+                                        _.UserContext = userContext;
+                                        _.ExposeExceptions = _options.ExposeExceptions;
+                                        _.ValidationRules = _options.ValidationRules.Concat(DocumentValidator.CoreRules()).ToList();
+                                        _.Listeners.Add(_dataLoaderDocumentListener);
+                                    });
+                                }));
+
+                            await WriteResponseAsync(context, results);
+                        }
+                        else
+                        {
+                            var jobject = body as JObject;
+
+                            gqlRequest = jobject.ToObject<GraphQLRequest>();
+                            await ProcessGraphQlRequest(context, schema, gqlRequest, userContext);
+                        }
                         break;
                     case GraphQLContentType:
                         gqlRequest.Query = await ReadAsStringAsync(httpRequest.Body);
+                        await ProcessGraphQlRequest(context, schema, gqlRequest, userContext);
                         break;
                     default:
                         await WriteResponseAsync(context, HttpStatusCode.BadRequest, $"Invalid 'Content-Type' header: non-supported media type. Must be of '{JsonContentType}' or '{GraphQLContentType}'. See: http://graphql.org/learn/serving-over-http/.");
                         return;
                 }
             }
+        }
 
-            object userContext = null;
-            var userContextBuilder = context.RequestServices.GetService<IUserContextBuilder>();
-            if (userContextBuilder != null)
-            {
-                userContext = await userContextBuilder.BuildUserContext(context);
-            }
-            else
-            {
-                userContext = _options.BuildUserContext?.Invoke(context);
-            }
-
+        private async Task ProcessGraphQlRequest(HttpContext context, ISchema schema, GraphQLRequest gqlRequest, object userContext)
+        {
             try
             {
                 var result = await _executer.ExecuteAsync(_ =>
@@ -123,7 +160,7 @@ namespace GraphQL.Server.Transports.AspNetCore
                     _.ValidationRules = _options.ValidationRules.Concat(DocumentValidator.CoreRules()).ToList();
                     _.Listeners.Add(_dataLoaderDocumentListener);
                 });
-                
+
                 await WriteResponseAsync(context, result);
             }
             catch (Exception e)
@@ -131,8 +168,6 @@ namespace GraphQL.Server.Transports.AspNetCore
                 _logger.LogError(e.ToString());
                 throw e;
             }
-
-           
         }
 
         private async Task WriteResponseAsync(HttpContext context, HttpStatusCode statusCode, string errorMessage)
@@ -144,8 +179,24 @@ namespace GraphQL.Server.Transports.AspNetCore
             _logger.LogError($"Error responding to GraphQL request:  {errorMessage}");
             result.Errors.Add(new ExecutionError(errorMessage));
 
-            
+
             await WriteResponseAsync(context, result);
+        }
+
+        private async Task WriteResponseAsync(HttpContext context, ExecutionResult[] results)
+        {
+            var json = _writer.Write(results);
+
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = (int)HttpStatusCode.OK;
+
+            if (results.Any(r => r.Errors?.Any() == true))
+            {
+                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                _logger.LogError($"Error responding to GraphQL request:  ");
+                results.ForEach(r => r.Errors.ForEach(e => _logger.LogError(e.InnerException != null ? e.InnerException.ToString() : e.ToString())));
+            }
+            await context.Response.WriteAsync(json);
         }
 
         private async Task WriteResponseAsync(HttpContext context, ExecutionResult result)
@@ -153,11 +204,11 @@ namespace GraphQL.Server.Transports.AspNetCore
             var json = _writer.Write(result);
 
             context.Response.ContentType = "application/json";
-            context.Response.StatusCode =  (int)HttpStatusCode.OK;
+            context.Response.StatusCode = (int)HttpStatusCode.OK;
 
             if (result.Errors?.Any() == true)
             {
-                context.Response.StatusCode = (int) HttpStatusCode.BadRequest;
+                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
                 _logger.LogError($"Error responding to GraphQL request:  ");
                 result.Errors.ForEach(e => _logger.LogError(e.InnerException != null ? e.InnerException.ToString() : e.ToString()));
             }
