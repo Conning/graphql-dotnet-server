@@ -130,7 +130,7 @@ namespace GraphQL.Server.Transports.AspNetCore
                         {
                             var jobject = body as JObject;
 
-                            gqlRequest = jobject.ToObject<GraphQLRequest>();
+                            gqlRequest = jobject.ToObject<GraphQLRequest>(); 
                             await ProcessGraphQlRequest(context, schema, gqlRequest, userContext);
                         }
                         break;
