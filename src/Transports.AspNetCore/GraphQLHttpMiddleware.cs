@@ -103,27 +103,14 @@ namespace GraphQL.Server.Transports.AspNetCore
                         {
                             var array = (body as JArray).ToArray<dynamic>();
 
-                            var results = await Task.WhenAll(
-                                array.Select((dynamic r) =>
+                            var results = await Task<ExecutionResult>.WhenAll(
+                                array.Select<dynamic, Task<ExecutionResult>>(r =>
                                 {
-                                    var query = r.query;
-                                    var operation = r.operationName;
+                                    var query = r.query.ToString();
+                                    var operation = r.operationName.ToString();
                                     var variables = (JObject) r.variables;
 
-                                    return _executer.ExecuteAsync(_ =>
-                                    {
-                                        _.Schema = schema;
-                                        _.Query = query;
-                                        _.OperationName = operation;
-                                        _.Inputs = variables.ToInputs();
-                                        _.UserContext = userContext;
-                                        _.ComplexityConfiguration = _options.ComplexityConfiguration;
-                                        _.EnableMetrics = _options.EnableMetrics;
-                                        _.ExposeExceptions = _options.ExposeExceptions;
-                                        _.SetFieldMiddleware = _options.SetFieldMiddleware;
-                                        _.ValidationRules = _options.ValidationRules.Concat(DocumentValidator.CoreRules()).ToList();
-                                        _.Listeners.Add(_dataLoaderDocumentListener);
-                                    });
+                                    return ExecuteGraphQlRequest(schema, query, operation, variables, userContext);
                                 }));
 
                             await WriteResponseAsync(context, results);
@@ -133,13 +120,13 @@ namespace GraphQL.Server.Transports.AspNetCore
                             var jobject = body as JObject;
 
                             gqlRequest = jobject.ToObject<GraphQLRequest>();
-                            await ProcessGraphQlRequest(context, schema, gqlRequest, userContext);
+                            await ProcessGraphQlRequest(context, schema, gqlRequest.Query, gqlRequest.OperationName, gqlRequest.Variables, userContext);
                         }
 
                         break;
                     case GraphQLContentType:
                         gqlRequest.Query = await ReadAsStringAsync(httpRequest.Body);
-                        await ProcessGraphQlRequest(context, schema, gqlRequest, userContext);
+                        await ProcessGraphQlRequest(context, schema, gqlRequest.Query, gqlRequest.OperationName, gqlRequest.Variables, userContext);
                         break;
                     default:
                         await WriteResponseAsync(context, HttpStatusCode.BadRequest,
@@ -149,24 +136,11 @@ namespace GraphQL.Server.Transports.AspNetCore
             }
         }
 
-        private async Task ProcessGraphQlRequest(HttpContext context, ISchema schema, GraphQLRequest gqlRequest, object userContext)
+        private async Task ProcessGraphQlRequest(HttpContext context, ISchema schema, string query, string operationName, JObject variables, object userContext)
         {
             try
             {
-                var result = await _executer.ExecuteAsync(x =>
-                {
-                    x.Schema = schema;
-                    x.Query = gqlRequest.Query;
-                    x.OperationName = gqlRequest.OperationName;
-                    x.Inputs = gqlRequest.Variables.ToInputs();
-                    x.UserContext = userContext;
-                    x.ComplexityConfiguration = _options.ComplexityConfiguration;
-                    x.EnableMetrics = _options.EnableMetrics;
-                    x.ExposeExceptions = _options.ExposeExceptions;
-                    x.SetFieldMiddleware = _options.SetFieldMiddleware;
-                    x.ValidationRules = _options.ValidationRules.Concat(DocumentValidator.CoreRules()).ToList();
-                    x.Listeners.Add(_dataLoaderDocumentListener);
-                });
+                var result = await ExecuteGraphQlRequest(schema, query, operationName, variables, userContext);
 
                 await WriteResponseAsync(context, result);
             }
@@ -176,6 +150,25 @@ namespace GraphQL.Server.Transports.AspNetCore
                 throw e;
             }
         }
+
+        private Task<ExecutionResult> ExecuteGraphQlRequest(ISchema schema, string query, string operationName, JObject variables, object userContext)
+        {
+            return _executer.ExecuteAsync(_ =>
+            {
+                _.Schema = schema;
+                _.Query = query;
+                _.OperationName = operationName;
+                _.Inputs = variables.ToInputs();
+                _.UserContext = userContext;
+                _.ComplexityConfiguration = _options.ComplexityConfiguration;
+                _.EnableMetrics = _options.EnableMetrics;
+                _.ExposeExceptions = _options.ExposeExceptions;
+                _.SetFieldMiddleware = _options.SetFieldMiddleware;
+                _.ValidationRules = _options.ValidationRules.Concat(DocumentValidator.CoreRules()).ToList();
+                _.Listeners.Add(_dataLoaderDocumentListener);
+            });
+        }
+        
 
         private async Task WriteResponseAsync(HttpContext context, HttpStatusCode statusCode, string errorMessage)
         {
