@@ -4,7 +4,6 @@ using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
-using Conning.Library.Utility;
 using GraphQL.DataLoader;
 using GraphQL.Http;
 using GraphQL.Server.Transports.AspNetCore.Common;
@@ -109,16 +108,19 @@ namespace GraphQL.Server.Transports.AspNetCore
                                 {
                                     var query = r.query;
                                     var operation = r.operationName;
-                                    var variables = (JObject)r.variables;
+                                    var variables = (JObject) r.variables;
 
                                     return _executer.ExecuteAsync(_ =>
                                     {
                                         _.Schema = schema;
                                         _.Query = query;
-                                    _.OperationName = operation;
+                                        _.OperationName = operation;
                                         _.Inputs = variables.ToInputs();
                                         _.UserContext = userContext;
+                                        _.ComplexityConfiguration = _options.ComplexityConfiguration;
+                                        _.EnableMetrics = _options.EnableMetrics;
                                         _.ExposeExceptions = _options.ExposeExceptions;
+                                        _.SetFieldMiddleware = _options.SetFieldMiddleware;
                                         _.ValidationRules = _options.ValidationRules.Concat(DocumentValidator.CoreRules()).ToList();
                                         _.Listeners.Add(_dataLoaderDocumentListener);
                                     });
@@ -130,16 +132,18 @@ namespace GraphQL.Server.Transports.AspNetCore
                         {
                             var jobject = body as JObject;
 
-                            gqlRequest = jobject.ToObject<GraphQLRequest>(); 
+                            gqlRequest = jobject.ToObject<GraphQLRequest>();
                             await ProcessGraphQlRequest(context, schema, gqlRequest, userContext);
                         }
+
                         break;
                     case GraphQLContentType:
                         gqlRequest.Query = await ReadAsStringAsync(httpRequest.Body);
                         await ProcessGraphQlRequest(context, schema, gqlRequest, userContext);
                         break;
                     default:
-                        await WriteResponseAsync(context, HttpStatusCode.BadRequest, $"Invalid 'Content-Type' header: non-supported media type. Must be of '{JsonContentType}' or '{GraphQLContentType}'. See: http://graphql.org/learn/serving-over-http/.");
+                        await WriteResponseAsync(context, HttpStatusCode.BadRequest,
+                            $"Invalid 'Content-Type' header: non-supported media type. Must be of '{JsonContentType}' or '{GraphQLContentType}'. See: http://graphql.org/learn/serving-over-http/.");
                         return;
                 }
             }
@@ -149,16 +153,19 @@ namespace GraphQL.Server.Transports.AspNetCore
         {
             try
             {
-                var result = await _executer.ExecuteAsync(_ =>
+                var result = await _executer.ExecuteAsync(x =>
                 {
-                    _.Schema = schema;
-                    _.Query = gqlRequest.Query;
-                    _.OperationName = gqlRequest.OperationName;
-                    _.Inputs = gqlRequest.Variables.ToInputs();
-                    _.UserContext = userContext;
-                    _.ExposeExceptions = _options.ExposeExceptions;
-                    _.ValidationRules = _options.ValidationRules.Concat(DocumentValidator.CoreRules()).ToList();
-                    _.Listeners.Add(_dataLoaderDocumentListener);
+                    x.Schema = schema;
+                    x.Query = gqlRequest.Query;
+                    x.OperationName = gqlRequest.OperationName;
+                    x.Inputs = gqlRequest.Variables.ToInputs();
+                    x.UserContext = userContext;
+                    x.ComplexityConfiguration = _options.ComplexityConfiguration;
+                    x.EnableMetrics = _options.EnableMetrics;
+                    x.ExposeExceptions = _options.ExposeExceptions;
+                    x.SetFieldMiddleware = _options.SetFieldMiddleware;
+                    x.ValidationRules = _options.ValidationRules.Concat(DocumentValidator.CoreRules()).ToList();
+                    x.Listeners.Add(_dataLoaderDocumentListener);
                 });
 
                 await WriteResponseAsync(context, result);
@@ -188,14 +195,21 @@ namespace GraphQL.Server.Transports.AspNetCore
             var json = _writer.Write(results);
 
             context.Response.ContentType = "application/json";
-            context.Response.StatusCode = (int)HttpStatusCode.OK;
+            context.Response.StatusCode = (int) HttpStatusCode.OK;
 
             if (results.Any(r => r.Errors?.Any() == true))
             {
-                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                context.Response.StatusCode = (int) HttpStatusCode.BadRequest;
                 _logger.LogError($"Error responding to GraphQL request:  ");
-                results.ForEach(r => r.Errors.ForEach(e => _logger.LogError(e.InnerException != null ? e.InnerException.ToString() : e.ToString())));
+                foreach (var r in results)
+                {
+                    foreach (var e in r.Errors)
+                    {
+                        _logger.LogError(e.InnerException != null ? e.InnerException.ToString() : e.ToString());
+                    }
+                }
             }
+
             await context.Response.WriteAsync(json);
         }
 
@@ -204,14 +218,18 @@ namespace GraphQL.Server.Transports.AspNetCore
             var json = _writer.Write(result);
 
             context.Response.ContentType = "application/json";
-            context.Response.StatusCode = (int)HttpStatusCode.OK;
+            context.Response.StatusCode = (int) HttpStatusCode.OK;
 
             if (result.Errors?.Any() == true)
             {
-                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                context.Response.StatusCode = (int) HttpStatusCode.BadRequest;
                 _logger.LogError($"Error responding to GraphQL request:  ");
-                result.Errors.ForEach(e => _logger.LogError(e.InnerException != null ? e.InnerException.ToString() : e.ToString()));
+                foreach (var e in result.Errors)
+                {
+                    _logger.LogError(e.InnerException != null ? e.InnerException.ToString() : e.ToString());
+                }
             }
+
             await context.Response.WriteAsync(json);
         }
 
