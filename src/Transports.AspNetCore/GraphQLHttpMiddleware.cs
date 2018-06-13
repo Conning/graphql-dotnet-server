@@ -196,9 +196,12 @@ namespace GraphQL.Server.Transports.AspNetCore
                 _logger.LogError($"Error responding to GraphQL request:  ");
                 foreach (var r in results)
                 {
-                    foreach (var e in r.Errors)
+                    if (r != null && r.Errors != null)
                     {
-                        _logger.LogError(e.InnerException != null ? e.InnerException.ToString() : e.ToString());
+                        foreach (var e in r.Errors)
+                        {
+                            _logger.LogError(e.InnerException != null ? e.InnerException.ToString() : e.ToString());
+                        }
                     }
                 }
             }
