@@ -16,7 +16,6 @@
     <Copyright>Pekka Heikura</Copyright>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="GraphQL" Version="2.0.0-alpha-912" />
     <PackageReference Include="Microsoft.AspNetCore.WebSockets" Version="2.1.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="2.1.0" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
