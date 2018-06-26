@@ -154,7 +154,16 @@ namespace GraphQL.Server.Transports.AspNetCore
         private Task<ExecutionResult> ExecuteGraphQlRequest(ISchema schema, string query, string operationName, JObject variables, object userContext)
         {
 #if DEBUG
-            _logger.LogDebug($"Execute graphQlRequest - {operationName} - {variables}");
+            var indent = false;
+            if (!string.IsNullOrEmpty(operationName))
+            {
+                _logger.LogDebug($"ExecuteGraphQlRequest({operationName})");                
+            }
+            
+            _logger.LogDebug($"Query:  {query.Truncate(150).Replace("\n", " ")}");
+            if (variables != null && variables.Count > 0) 
+                _logger.LogDebug($"\tInputs:  {variables.ToString(Formatting.None).Replace("\n", " ").Truncate(100)}");
+            
 #endif
 
             return _executer.ExecuteAsync(_ =>

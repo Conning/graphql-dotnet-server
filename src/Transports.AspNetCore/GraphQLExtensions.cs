@@ -1,3 +1,4 @@
+using System;
 using GraphQL.Http;
 using GraphQL.Types;
 using Microsoft.AspNetCore.Builder;
@@ -60,6 +61,31 @@ namespace GraphQL.Server.Transports.AspNetCore
             builder.UseMiddleware<GraphQLHttpMiddleware<TSchema>>(Options.Create(graphQLHttpOptions));
 
             return builder;
+        }
+        
+        public static string Truncate(this string str, int length, bool addEllipsis = true)
+        {
+            if(length < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(length), "Length must be >= 0");
+            }
+
+            if (str == null)
+            {
+                return null;
+            }
+
+            int maxLength = Math.Min(str.Length, length);
+
+            var result = str.Substring(0, maxLength);
+            if (!addEllipsis || maxLength == str.Length)
+            {
+                return result;
+            }
+            else
+            {
+                return $"{result}...";
+            }
         }
     }
 }
