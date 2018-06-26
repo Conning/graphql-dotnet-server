@@ -153,6 +153,10 @@ namespace GraphQL.Server.Transports.AspNetCore
 
         private Task<ExecutionResult> ExecuteGraphQlRequest(ISchema schema, string query, string operationName, JObject variables, object userContext)
         {
+#if DEBUG
+            _logger.LogDebug($"Execute graphQlRequest - {operationName} - {variables}");
+#endif
+
             return _executer.ExecuteAsync(_ =>
             {
                 _.Schema = schema;
@@ -168,7 +172,7 @@ namespace GraphQL.Server.Transports.AspNetCore
                 _.Listeners.Add(_dataLoaderDocumentListener);
             });
         }
-        
+
 
         private async Task WriteResponseAsync(HttpContext context, HttpStatusCode statusCode, string errorMessage)
         {
