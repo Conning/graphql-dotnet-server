@@ -50,7 +50,7 @@ namespace GraphQL.Server.Transports.Subscriptions.Abstractions
             {
                 await _handler.Completion;
             }
-            catch (AggregateException e)
+            catch (AggregateException )
             {
                 return;
             }

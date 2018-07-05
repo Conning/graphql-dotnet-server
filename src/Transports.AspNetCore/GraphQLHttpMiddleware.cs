@@ -154,7 +154,6 @@ namespace GraphQL.Server.Transports.AspNetCore
         private Task<ExecutionResult> ExecuteGraphQlRequest(ISchema schema, string query, string operationName, JObject variables, object userContext)
         {
 #if DEBUG
-            var indent = false;
             if (!string.IsNullOrEmpty(operationName))
             {
                 _logger.LogDebug($"ExecuteGraphQlRequest({operationName})");                
