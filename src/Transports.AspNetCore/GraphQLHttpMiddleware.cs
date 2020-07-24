@@ -83,6 +83,14 @@ namespace GraphQL.Server.Transports.AspNetCore
                 userContext = _options.BuildUserContext?.Invoke(context);
             }
 
+            if (userContext == null)
+            {
+                context.Response.ContentType = "application/json";
+                context.Response.StatusCode = (int) HttpStatusCode.Unauthorized;
+                
+                return;
+            }
+
             if (HttpMethods.IsGet(httpRequest.Method) || (HttpMethods.IsPost(httpRequest.Method) && httpRequest.Query.ContainsKey(GraphQLRequest.QueryKey)))
             {
                 ExtractGraphQLRequestFromQueryString(httpRequest.Query, gqlRequest);
